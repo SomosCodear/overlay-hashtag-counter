@@ -1,14 +1,8 @@
-const express = require("express");
-const path = require("path");
-const app = express();
-const port = process.env.PORT || 8181;
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
 
-let counter = {
-    encuentrosCodear: 0,
-    quedateEnCasa: 0
-};
+const trackHashtags = process.env.TRACK_HASHTAGS.replace(/#/g, "").split(",");
+const counter = trackHashtags.map(hashtag => ({ [hashtag]: 0 })).reduce((obj, pair) => ({ ...obj, ...pair }));
 
 require("dotenv").config();
 
@@ -21,35 +15,17 @@ const twit = new Twit({
     access_token_secret: process.env.TWIT_ACCESS_TOKEN_SECRET
 });
 
-function configureRoutes() {
-    app.use(express.static(path.join(__dirname,"/public")));
-    app.get("/", (req, res) => {
-        res.sendfile(path.join(__dirname, "/public/index.html"));
-    })
-}
+const streams = {};
 
 function configureTwit() {
-
-    // create stream
-    const streamCasa = twit.stream('statuses/filter', { track: "#QuedateEnCasa" });
-
-    // listen to tweets with those words
-    streamCasa.on('tweet', (tweet) => {
-        counter.quedateEnCasa ++;
-        console.log("Tweets:",counter);
-        io.sockets.emit("update", counter);
+    trackHashtags.forEach(hashtag => {
+        const stream = twit.stream('statuses/filter', { track: `#${hashtag}` });
+        stream.on('tweet', () => {
+            counter[hashtag] += 1;
+            io.sockets.emit("update", counter[hashtag]);
+        });
+        streams[hashtag] = stream;
     });
-
-    // create stream
-    const streamCodear = twit.stream('statuses/filter', { track: "#EncuentrosCodear" });
-
-    // listen to tweets with those words
-    streamCodear.on('tweet', (tweet) => {
-        counter.encuentrosCodear ++;
-        console.log("Tweets:",counter);
-        io.sockets.emit("update", counter);
-    });
-
 }
 
 function configureSocket() {
@@ -59,14 +35,8 @@ function configureSocket() {
 }
 
 function startServer() {
-
-    configureRoutes();
     configureSocket();
     configureTwit();
-
-    server.listen(port, () => {
-        console.log("conectado a " + port);
-    })
 }
 
 startServer();
