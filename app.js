@@ -1,3 +1,5 @@
+const express = require('express');
+const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
 
@@ -8,6 +10,7 @@ require("dotenv").config();
 
 // configure twit
 const Twit = require("twit");
+const { Http2ServerRequest } = require('http2');
 const twit = new Twit({
     consumer_key: process.env.TWIT_CONSUMER_KEY,
     consumer_secret: process.env.TWIT_CONSUMER_SECRET,
@@ -22,7 +25,7 @@ function configureTwit() {
         const stream = twit.stream('statuses/filter', { track: `#${hashtag}` });
         stream.on('tweet', () => {
             counter[hashtag] += 1;
-            io.sockets.emit("update", counter[hashtag]);
+            io.sockets.emit("update", { hashtag, count: counter[hashtag] });
         });
         streams[hashtag] = stream;
     });
@@ -34,9 +37,14 @@ function configureSocket() {
     });
 }
 
+function configureExpress() {
+    server.listen(3000);
+}
+
 function startServer() {
     configureSocket();
     configureTwit();
+    configureExpress();
 }
 
 startServer();
